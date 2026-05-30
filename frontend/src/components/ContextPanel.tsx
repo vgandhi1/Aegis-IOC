@@ -56,6 +56,21 @@ export function ContextPanel({ domain }: { domain: DomainKey }) {
   const narrative = aiNarrative(domain, row);
   const availableActions = config.actions.filter((a) => identity?.scopes.includes(a.scope));
 
+  const [enrichment, setEnrichment] = useState<any | null>(null);
+  const [enriching, setEnriching] = useState(false);
+  const runEnrich = async () => {
+    if (!token) return;
+    setEnriching(true);
+    setEnrichment(null);
+    try {
+      setEnrichment(await api.get(`/cyber/alerts/${row.alert_id}/enrich`, token));
+    } catch (err: any) {
+      setEnrichment({ error: err?.message ?? "enrichment failed" });
+    } finally {
+      setEnriching(false);
+    }
+  };
+
   const runAction = async (action: ActionDescriptor) => {
     if (!token) return;
     setBusy(action.label);
@@ -83,6 +98,37 @@ export function ContextPanel({ domain }: { domain: DomainKey }) {
           </p>
         )}
       </section>
+
+      {domain === "cyber" && (
+        <section className="ctx-block">
+          <h4>Live Threat Enrichment</h4>
+          <button className="action-btn action-primary" disabled={enriching} onClick={runEnrich}>
+            {enriching ? "Querying Shodan / AbuseIPDB…" : "Enrich blast radius (live)"}
+          </button>
+          {enrichment && enrichment.alert_id === row.alert_id && (
+            <div className="ctx-enrich">
+              {enrichment.live_data_available ? (
+                <>
+                  {enrichment.shodan && (
+                    <p className="ctx-citation">
+                      <span>Shodan</span> open ports: {(enrichment.shodan.open_ports || []).join(", ") || "none"}
+                      {enrichment.shodan.organization ? ` · ${enrichment.shodan.organization}` : ""}
+                    </p>
+                  )}
+                  {enrichment.abuseipdb && (
+                    <p className="ctx-citation">
+                      <span>AbuseIPDB</span> confidence {enrichment.abuseipdb.abuse_confidence_score}% ·{" "}
+                      {enrichment.abuseipdb.total_reports} reports · {enrichment.abuseipdb.country_code ?? "?"}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="ctx-feedback">{enrichment.note ?? enrichment.error}</p>
+              )}
+            </div>
+          )}
+        </section>
+      )}
 
       {availableActions.length > 0 && (
         <section className="ctx-block">

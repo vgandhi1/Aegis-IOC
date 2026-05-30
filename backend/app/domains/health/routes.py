@@ -43,6 +43,15 @@ async def list_reports(
     return _service(request).latest(min(max(limit, 1), 1000))
 
 
+@router.post("/clinical/fhir/import")
+async def import_fhir_patients(
+    request: Request,
+    limit: int = 8,
+    _: Principal = Depends(require_scopes("clinical:read")),
+) -> dict:
+    return await _service(request).import_fhir_patients(min(max(limit, 1), 20))
+
+
 @router.post("/clinical/reports/{reconciliation_id}/override", response_model=OverrideResult)
 async def override(
     reconciliation_id: str,

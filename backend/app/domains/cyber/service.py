@@ -5,7 +5,7 @@ from __future__ import annotations
 from ...core.events import Broadcaster
 from ...core.ids import new_id, utc_now_iso
 from ...core.store import RingStore
-from . import inference
+from . import connectors, inference
 from .schemas import (
     CyberAlert,
     RemediationResult,
@@ -50,6 +50,28 @@ class CyberService:
 
     def latest(self, limit: int = 200) -> list[dict]:
         return self._store.latest(limit)
+
+    async def enrich(self, alert_id: str) -> dict | None:
+        """Tier-2 blast-radius enrichment for an alert via Shodan + AbuseIPDB.
+
+        Returns live exposure/abuse intelligence for the alert's source IP, or a
+        graceful "unavailable" payload when no API keys are configured.
+        """
+        record = self._store.get(alert_id)
+        if record is None:
+            return None
+        ip = record.get("source_ip", "")
+        shodan = await connectors.shodan_host(ip)
+        abuse = await connectors.abuseipdb_check(ip)
+        available = shodan is not None or abuse is not None
+        return {
+            "alert_id": alert_id,
+            "source_ip": ip,
+            "live_data_available": available,
+            "shodan": shodan,
+            "abuseipdb": abuse,
+            "note": None if available else "No live feed configured (set AEGIS_SHODAN_API_KEY / AEGIS_ABUSEIPDB_API_KEY).",
+        }
 
     async def remediate(self, alert_id: str, action: str, acted_by: str) -> RemediationResult | None:
         record = self._store.patch(

@@ -51,6 +51,8 @@ export const api = {
 
   list: <T>(domainPath: string, token: string) => request<T[]>(domainPath, {}, token),
 
+  get: <T>(path: string, token: string) => request<T>(path, {}, token),
+
   post: <T>(path: string, body: unknown, token: string) =>
     request<T>(path, { method: "POST", body: JSON.stringify(body) }, token),
 };

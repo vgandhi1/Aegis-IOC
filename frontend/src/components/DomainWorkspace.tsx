@@ -81,7 +81,7 @@ export function DomainWorkspace({ domain }: { domain: DomainKey }) {
             defaultColDef={defaultColDef}
             getRowId={getRowId}
             animateRows
-            rowSelection="single"
+            rowSelection={{ mode: "singleRow", checkboxes: false, enableClickSelection: true }}
             onRowClicked={(e: RowClickedEvent) => selectRow(domain, e.data)}
             onGridReady={(e: GridReadyEvent) => e.api.sizeColumnsToFit()}
           />

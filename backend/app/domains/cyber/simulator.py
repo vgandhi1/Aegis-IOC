@@ -1,10 +1,16 @@
-"""Background telemetry simulator (stand-in for the Kafka/Flink ingest stream)."""
+"""Background telemetry simulator (stand-in for the Kafka/Flink ingest stream).
+
+``run`` produces synthetic telemetry. ``run_live`` enriches a rotating set of
+real source IPs with live AbuseIPDB confidence scores (rate-limited to stay
+under the free tier) and submits them as telemetry.
+"""
 
 from __future__ import annotations
 
 import asyncio
 import random
 
+from . import connectors
 from .schemas import TelemetrySubmission
 from .service import CyberService
 
@@ -30,3 +36,26 @@ async def run(service: CyberService, *, interval: float = 1.2) -> None:
             abuse_confidence_score=random.randint(80, 99) if suspicious else random.randint(0, 30),
         )
         await service.submit_telemetry(payload)
+
+
+async def run_live(service: CyberService, *, poll_seconds: float = 95.0) -> None:
+    """Poll AbuseIPDB for real abuse scores on a rotating IP set (rate-limited)."""
+    while True:
+        for ip in _SRC_IPS:
+            await asyncio.sleep(poll_seconds)
+            abuse = await connectors.abuseipdb_check(ip)
+            if abuse is None:
+                continue  # no key / not public / lookup failed -> skip silently
+            await service.submit_telemetry(
+                TelemetrySubmission(
+                    source_ip=ip,
+                    destination_ip=random.choice(_DST_IPS),
+                    source_port=random.randint(1024, 65535),
+                    destination_port=22,
+                    protocol="TCP",
+                    bytes_transferred=random.randint(64, 4096),
+                    tcp_flags=["SYN"],
+                    failed_auth_attempts_1m=random.randint(20, 60),
+                    abuse_confidence_score=abuse["abuse_confidence_score"],
+                )
+            )

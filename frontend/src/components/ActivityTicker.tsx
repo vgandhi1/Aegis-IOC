@@ -1,8 +1,13 @@
+import { useMemo } from "react";
 import { useAppStore, type DomainKey } from "../store/useAppStore";
 import { severityColors } from "../domains/configs";
 
 export function ActivityTicker({ domain }: { domain: DomainKey }) {
-  const ticker = useAppStore((s) => s.ticker.filter((t) => t.domain === domain));
+  // Subscribe to the stable array reference, then derive with useMemo. Filtering
+  // inside the selector would return a new array each render, breaking zustand's
+  // snapshot caching and causing an infinite update loop.
+  const allTicker = useAppStore((s) => s.ticker);
+  const ticker = useMemo(() => allTicker.filter((t) => t.domain === domain), [allTicker, domain]);
 
   return (
     <aside className="pane pane-left">

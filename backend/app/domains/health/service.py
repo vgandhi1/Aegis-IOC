@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from ...config import get_settings
 from ...core.events import Broadcaster
 from ...core.ids import new_id, utc_now_iso
 from ...core.store import RingStore
-from . import inference, knowledge
+from . import connectors, inference, knowledge
 from .schemas import (
     ClinicalReport,
     OverrideResult,
@@ -30,6 +31,22 @@ class HealthService:
         patient = knowledge.PATIENTS.get(body.patient_id)
         active_meds = patient["active_medications"] if patient else []
         cds = inference.evaluate(body.proposed_prescription_display, active_meds)
+
+        # Live grounding: replace the seeded case count with the real openFDA
+        # total when a contraindication is found and the feed is enabled.
+        if (
+            get_settings().enable_live_health
+            and cds.contraindication_detected
+            and cds.fda_adverse_event_summary
+            and cds.interacting_medication
+        ):
+            real_total = await connectors.openfda_pair_count(
+                body.proposed_prescription_display, cds.interacting_medication
+            )
+            if real_total is not None:
+                cds.fda_adverse_event_summary.total_matching_case_reports = real_total
+                if cds.evidence_grounding:
+                    cds.evidence_grounding.source_database = "openFDA Drug Event Repository (live)"
 
         report = ClinicalReport(
             reconciliation_id=new_id("rec"),
@@ -67,6 +84,28 @@ class HealthService:
 
     def latest(self, limit: int = 200) -> list[dict]:
         return self._store.latest(limit)
+
+    async def import_fhir_patients(self, limit: int = 8) -> dict:
+        """Pull real FHIR patients from the public sandbox and register them.
+
+        Registered patients become available for reconciliation. Each imported
+        patient is seeded with a Warfarin active medication so the live openFDA
+        contraindication path can be demonstrated end-to-end.
+        """
+        patients = await connectors.fhir_list_patients(limit)
+        if not patients:
+            return {"imported": 0, "patients": [], "note": "FHIR sandbox unavailable or returned no patients."}
+        imported = []
+        for p in patients:
+            obs = await connectors.fhir_latest_observation(p["fhir_id"])
+            knowledge.PATIENTS[p["patient_id"]] = {
+                "gender": p.get("gender"),
+                "birthDate": p.get("birthDate"),
+                # seed a known interacting drug so the demo can surface a conflict
+                "active_medications": [{"code": "RxNorm:11124", "display": "Warfarin"}],
+            }
+            imported.append({**p, "latest_observation": obs})
+        return {"imported": len(imported), "patients": imported, "note": None}
 
     async def override(
         self, reconciliation_id: str, *, acknowledged: bool, signature: str

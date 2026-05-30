@@ -39,6 +39,18 @@ async def list_alerts(
     return _service(request).latest(min(max(limit, 1), 1000))
 
 
+@router.get("/alerts/{alert_id}/enrich")
+async def enrich_alert(
+    alert_id: str,
+    request: Request,
+    _: Principal = Depends(require_scopes("cyber:read")),
+) -> dict:
+    result = await _service(request).enrich(alert_id)
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
+    return result
+
+
 @router.post("/alerts/{alert_id}/remediate", response_model=RemediationResult)
 async def remediate(
     alert_id: str,

@@ -19,24 +19,31 @@ export function subscribeStream(domain: string, token: string, onMessage: Stream
   const connect = () => {
     if (closed) return;
     const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    socket = new WebSocket(`${proto}://${window.location.host}/ws/${domain}?token=${encodeURIComponent(token)}`);
+    const ws = new WebSocket(`${proto}://${window.location.host}/ws/${domain}?token=${encodeURIComponent(token)}`);
+    socket = ws;
 
-    socket.onmessage = (event) => {
+    ws.onopen = () => {
+      retry = 0;
+      // If the subscription was disposed while still connecting (e.g. React
+      // StrictMode's mount→cleanup→mount), close cleanly now that the socket is
+      // OPEN. Closing a CONNECTING socket is what triggers the browser warning
+      // "WebSocket is closed before the connection is established".
+      if (closed) ws.close(1000, "disposed");
+    };
+    ws.onmessage = (event) => {
       try {
         onMessage(JSON.parse(event.data) as StreamMessage);
       } catch {
         /* ignore malformed frames */
       }
     };
-    socket.onopen = () => {
-      retry = 0;
-    };
-    socket.onclose = () => {
+    ws.onclose = () => {
       if (closed) return;
       retry = Math.min(retry + 1, 6);
       timer = setTimeout(connect, 500 * retry);
     };
-    socket.onerror = () => socket?.close();
+    // Let onclose drive reconnection; closing here would race with CONNECTING.
+    ws.onerror = () => {};
   };
 
   connect();
@@ -44,6 +51,13 @@ export function subscribeStream(domain: string, token: string, onMessage: Stream
   return () => {
     closed = true;
     if (timer) clearTimeout(timer);
-    socket?.close();
+    if (!socket) return;
+    // Only call close() once the handshake is done; otherwise defer to onopen.
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.close(1000, "disposed");
+    } else if (socket.readyState === WebSocket.CLOSING || socket.readyState === WebSocket.CLOSED) {
+      /* already closing/closed */
+    }
+    // CONNECTING: onopen handler closes it once established (see above).
   };
 }

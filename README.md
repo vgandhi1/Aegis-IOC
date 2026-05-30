@@ -33,6 +33,35 @@ phased implementation roadmap.
 > etc.) is *simulated* behind single-module seams. See the "Reference vs.
 > Production" table in `AegisIOC.md` for the swap points.
 
+## Live external data feeds (optional)
+
+The system runs on simulators by default, but each module can pull **real** data.
+Every connector falls back to the seeded mock on any missing key / timeout, so it
+always keeps running. Configure via `backend/.env` (see `backend/.env.example`).
+
+| Module          | Feed          | Key?         | What it powers                                              |
+| --------------- | ------------- | ------------ | ----------------------------------------------------------- |
+| Aegis Threat    | AbuseIPDB     | yes (free)   | Real IP abuse scores in the live ingestion poller           |
+| Aegis Threat    | Shodan        | yes (free)   | On-demand blast-radius enrichment (open ports/vulns)        |
+| Aegis Clinical  | openFDA       | no           | Real adverse-event case counts in contraindication reports  |
+| Aegis Clinical  | HAPI FHIR     | no           | Import real FHIR R4 patients (`POST /health/clinical/fhir/import`) |
+| Aegis Ledger    | CoinGecko     | no           | Live market prices drive the transaction stream             |
+| Aegis Ledger    | Alpha Vantage | yes (free)   | FX reference rates                                           |
+
+The no-key feeds (openFDA, HAPI FHIR, CoinGecko) are **on by default**. Enable the
+keyed ones by adding keys and flags:
+
+```bash
+# backend/.env
+AEGIS_ABUSEIPDB_API_KEY=...      # then:
+AEGIS_ENABLE_LIVE_CYBER=true
+AEGIS_SHODAN_API_KEY=...         # powers the "Enrich blast radius (live)" button
+AEGIS_ALPHAVANTAGE_API_KEY=...
+```
+
+In the UI, select a cyber alert and click **Enrich blast radius (live)** to pull
+Shodan/AbuseIPDB data into the investigation panel.
+
 ## Quickstart (local, no Docker)
 
 ### 1. Backend

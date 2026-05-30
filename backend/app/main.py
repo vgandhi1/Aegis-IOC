@@ -61,13 +61,24 @@ async def lifespan(app: FastAPI):
     runtime = _build_runtime(app)
     runtime.broadcaster.start()
 
+    s = runtime.settings
     sim_tasks: list[asyncio.Task] = []
-    if runtime.settings.enable_simulators:
-        sim_tasks = [
+    if s.enable_simulators:
+        # Synthetic baseline streams (always keep the console populated).
+        sim_tasks += [
             asyncio.create_task(cyber_sim.run(runtime.cyber)),
             asyncio.create_task(health_sim.run(runtime.health)),
             asyncio.create_task(fintech_sim.run(runtime.fintech)),
         ]
+    # Live external feeds augment the baseline when enabled (graceful fallback).
+    if s.enable_live_cyber and s.abuseipdb_api_key:
+        sim_tasks.append(
+            asyncio.create_task(cyber_sim.run_live(runtime.cyber, poll_seconds=s.cyber_live_poll_seconds))
+        )
+    if s.enable_live_fintech:
+        sim_tasks.append(
+            asyncio.create_task(fintech_sim.run_live(runtime.fintech, poll_seconds=s.fintech_live_poll_seconds))
+        )
     try:
         yield
     finally:

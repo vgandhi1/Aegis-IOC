@@ -1,10 +1,16 @@
-"""Background transaction simulator (stand-in for the RabbitMQ event bus)."""
+"""Background transaction simulator (stand-in for the RabbitMQ event bus).
+
+``run`` emits synthetic transactions. ``run_live`` polls real CoinGecko prices
+and turns volatility spikes into cross-border transfers, stress-testing the
+WebSocket batching and fraud pipeline with live market velocity.
+"""
 
 from __future__ import annotations
 
 import asyncio
 import random
 
+from . import connectors
 from .schemas import TransactionEvaluation
 from .service import FintechService
 
@@ -33,3 +39,32 @@ async def run(service: FintechService, *, interval: float = 1.8) -> None:
             historical_max_single_tx_ratio=round(random.uniform(4.0, 9.0) if suspicious else random.uniform(0.5, 2.0), 1),
         )
         await service.evaluate(payload)
+
+
+_LIVE_ASSETS = ["bitcoin", "ethereum", "solana", "ripple", "cardano"]
+
+
+async def run_live(service: FintechService, *, poll_seconds: float = 6.0) -> None:
+    """Drive transactions from live CoinGecko prices; spikes route to high-risk Jx."""
+    while True:
+        await asyncio.sleep(poll_seconds)
+        market = await connectors.coingecko_market(_LIVE_ASSETS)
+        if not market:
+            continue  # feed unavailable -> the synthetic `run` loop keeps flowing
+        for asset, data in market.items():
+            change = abs(data.get("change_24h", 0.0))
+            spike = change > 5.0  # treat a >5% 24h move as a velocity spike
+            # amount scaled from live price so the grid shows real market figures
+            amount = round(min(max(data["price"], 100.0), 900_000.0), 2)
+            payload = TransactionEvaluation(
+                originating_account=f"acc_mkt_{asset[:4]}",
+                originating_routing_bic=random.choice(_ORIG_BICS),
+                destination_account=random.choice(_DEST_FLAGGED if spike else _DEST_NORMAL),
+                destination_routing_bic=random.choice(_DEST_BICS),
+                beneficiary_jurisdiction_country=random.choice(_HIGH_RISK_JX if spike else _LOW_RISK_JX),
+                amount=amount if spike else round(amount / 20.0, 2),
+                currency="USD",
+                distinct_beneficiaries_count_1h=random.randint(3, 8) if spike else random.randint(0, 2),
+                historical_max_single_tx_ratio=round(1.0 + change / 2.0, 1),
+            )
+            await service.evaluate(payload)

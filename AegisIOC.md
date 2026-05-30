@@ -78,6 +78,27 @@ seams so it can be swapped for the real thing.
 Each seam is a single module so a team can replace `inference.py` or `store.py`
 without touching routes or the frontend.
 
+### 1.3 Live External Data Feeds
+
+The reference can ingest **real** data through per-domain `connectors.py` modules.
+Every connector caches results, respects free-tier rate limits, and falls back to
+the seeded/simulated data on any missing key, timeout, or error — so the console
+never stops flowing. SSRF hardening: connectors only call operator-configured,
+hardcoded HTTPS base URLs, validate IP inputs (Shodan/AbuseIPDB) against public
+ranges, disable redirects, and send each API key only to its provider host.
+
+| Module         | Live feed     | Auth        | Role in pipeline                                                  |
+| -------------- | ------------- | ----------- | ---------------------------------------------------------------- |
+| Aegis Threat   | AbuseIPDB     | header key  | Real abuse confidence in the rate-limited ingestion poller       |
+| Aegis Threat   | Shodan        | query key   | On-demand blast-radius enrichment (`GET /cyber/alerts/{id}/enrich`) |
+| Aegis Clinical | openFDA       | none        | Real adverse-event totals injected into the contraindication report |
+| Aegis Clinical | HAPI FHIR R4  | none        | Import real Patient/Observation (`POST /health/clinical/fhir/import`) |
+| Aegis Ledger   | CoinGecko     | none        | Live prices drive the transaction stream (volatility → fraud)    |
+| Aegis Ledger   | Alpha Vantage | query key   | FX reference rates (cached; 25/day free tier)                    |
+
+Enable via the `AEGIS_*` env vars in `backend/.env.example`. The no-key feeds
+(openFDA, HAPI FHIR, CoinGecko) are on by default.
+
 ---
 
 ## 2. Micro-Frontend Shell & Unified UI Layout
