@@ -1,0 +1,18 @@
+services:
+  backend:
+    build: ./backend
+    environment:
+      # LOCAL DEMO ONLY — override with a real secret + IdP before any real deploy.
+      AEGIS_SECRET_KEY: "local-dev-only-change-me-please-32+chars"
+      AEGIS_ENVIRONMENT: "local"
+      AEGIS_CORS_ORIGINS: '["http://localhost:8080"]'
+      AEGIS_ENABLE_SIMULATORS: "true"
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
