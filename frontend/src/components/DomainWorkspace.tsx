@@ -73,7 +73,7 @@ export function DomainWorkspace({ domain }: { domain: DomainKey }) {
           </div>
           <span className="pane-count">{rows.length} records</span>
         </div>
-        <div className="ag-theme-quartz-dark grid-host">
+        <div className="ag-theme-quartz grid-host">
           <AgGridReact
             ref={gridRef}
             rowData={rows}

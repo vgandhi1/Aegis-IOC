@@ -26,33 +26,34 @@ export interface DomainConfig {
 }
 
 const severityColors: Record<Severity, string> = {
-  LOW: "#22c55e",
-  MEDIUM: "#f59e0b",
-  HIGH: "#fb923c",
-  CRITICAL: "#ef4444",
+  LOW: "#16a34a",
+  MEDIUM: "#d97706",
+  HIGH: "#ea580c",
+  CRITICAL: "#dc2626",
 };
 
 function ScoreBar({ value }: { value: number }) {
   const pct = Math.round(value * 1000) / 10;
-  const color = value > 0.85 ? "#ef4444" : value > 0.6 ? "#f59e0b" : "#22c55e";
+  const color = value > 0.85 ? "#dc2626" : value > 0.6 ? "#d97706" : "#16a34a";
   return (
     <div style={{ display: "flex", alignItems: "center", height: "100%", gap: 8 }}>
       <span style={{ fontWeight: 700, color, width: 52, fontVariantNumeric: "tabular-nums" }}>{pct}%</span>
-      <div style={{ flexGrow: 1, background: "#3f3f46", height: 6, borderRadius: 3, overflow: "hidden" }}>
+      <div style={{ flexGrow: 1, background: "#dbe9f6", height: 6, borderRadius: 3, overflow: "hidden" }}>
         <div style={{ background: color, width: `${pct}%`, height: "100%" }} />
       </div>
     </div>
   );
 }
 
+// Light-theme readable severity chips (dark text on a tinted background).
 function severityCellStyle(value: string) {
   const map: Record<string, any> = {
-    CRITICAL: { color: "#fecaca", fontWeight: 700 },
-    HIGH: { color: "#fed7aa", fontWeight: 700 },
-    MODERATE: { color: "#fde68a", fontWeight: 700 },
-    MEDIUM: { color: "#fde68a", fontWeight: 700 },
-    NONE: { color: "#86efac" },
-    LOW: { color: "#86efac" },
+    CRITICAL: { color: "#991b1b", backgroundColor: "#fee2e2", fontWeight: 700 },
+    HIGH: { color: "#9a3412", backgroundColor: "#ffedd5", fontWeight: 700 },
+    MODERATE: { color: "#92400e", backgroundColor: "#fef3c7", fontWeight: 700 },
+    MEDIUM: { color: "#92400e", backgroundColor: "#fef3c7", fontWeight: 700 },
+    NONE: { color: "#166534", backgroundColor: "#dcfce7" },
+    LOW: { color: "#166534", backgroundColor: "#dcfce7" },
   };
   return map[value] ?? {};
 }
