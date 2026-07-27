@@ -47,7 +47,7 @@ flowchart LR
 
 | # | Baseline | Change | Reason |
 |---|---|---|---|
-| 1 | Backend publishes `8000:8000` to host (`docker-compose.yml:10-11`) | Drop the host port binding; backend reachable only on the compose network | Two ingress paths means the nginx-enforced edge policy is optional. One door or the policy is decorative. |
+| 1 | Backend published `8000:8000` to the host | **Done** — host port dropped, backend `expose`d on the compose network only | Two ingress paths means the nginx-enforced edge policy is optional. One door or the policy is decorative. |
 | 2 | Security headers set in FastAPI middleware | Keep them, but treat nginx as the authority for edge headers (HSTS, CSP) | Headers must apply to static SPA responses too, which never touch FastAPI |
 | 3 | CORS list hand-maintained per environment | Derive from the deployment tier (one public origin, one private origin) | `allow_credentials=True` with a loose origin list is the classic cookie-theft setup |
 | 4 | Single stack serves everything | Split into two tiers off one image, separated by env flags only | Avoids a forked codebase; the public tier is the same build with capabilities switched off |
@@ -225,17 +225,19 @@ introduce them; it makes them reachable.
 3. **WS token in query string.** `ws/routes.py:26` takes `token` as a query
    param. Behind an edge proxy that URL is logged. Move to a subprotocol header
    or a single-use ticket exchanged over the authenticated HTTP session.
-4. **Backend host port.** Remove `8000:8000`. While it exists, every edge
-   control is bypassable by anything that can reach the host.
+4. ~~**Backend host port.**~~ **Closed.** `8000:8000` is gone; the backend is
+   `expose`d on the compose network only, so nginx is the sole ingress and its
+   edge policy is no longer optional. Direct API access is now the native
+   Quickstart path (`uvicorn --port 8000`), which publishes nothing.
 5. **`/health` exposure.** Returns `environment` and `app_name` with no auth.
    Keep it for the connector's origin check, block it at the public hostname.
 6. **CORS with credentials.** `allow_credentials=True` plus `allow_methods=["*"]`
    is safe only while the origin list is exactly one trusted hostname. Enforce
    that per tier; never let the demo origin appear in the console tier's list.
 
-Items 1 and 2 are not tunnel work — they are prerequisites. Item 1 is closed.
-Item 2 (plaintext demo user store) remains open and still blocks a public
-hostname.
+Items 1 and 2 are not tunnel work — they are prerequisites. Items 1 and 4 are
+closed. Item 2 (plaintext demo user store) remains open and still blocks a
+public hostname; items 3, 5, and 6 remain open.
 
 ---
 

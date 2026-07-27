@@ -10,8 +10,11 @@ services:
       AEGIS_ENVIRONMENT: "local"
       AEGIS_CORS_ORIGINS: '["http://localhost:8080"]'
       AEGIS_ENABLE_SIMULATORS: "true"
-    ports:
-      - "8000:8000"
+    # No host port. The backend is reachable only on the compose network, via
+    # nginx, so the edge policy in frontend/nginx.conf cannot be bypassed.
+    # For direct API access use the native Quickstart (uvicorn --port 8000).
+    expose:
+      - "8000"
 
   frontend:
     build: ./frontend
