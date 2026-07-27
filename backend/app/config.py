@@ -2,16 +2,27 @@
 
 Values are read from the environment (prefix ``AEGIS_``) with local-dev defaults.
 
-Security note: the default ``secret_key`` is for LOCAL DEVELOPMENT ONLY. It must
-be overridden via the environment before any non-local deployment, and the demo
-users in ``auth.users`` must be replaced by a real Identity Provider.
+Security note: there is no shipped ``secret_key``. When ``environment`` is
+``local`` and no key is supplied, a random one is generated per process — tokens
+therefore do not survive a restart, which is correct for a demo. Every other
+environment fails to start without ``AEGIS_SECRET_KEY``. The demo users in
+``auth.users`` must still be replaced by a real Identity Provider.
 """
 
 from __future__ import annotations
 
+import secrets
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Minimum length for the HS256 signing key. Shorter keys weaken the HMAC.
+MIN_SECRET_KEY_LENGTH = 32
+
+# Keys that were published in this repository's history and are therefore public.
+# Refused outright so a stale .env cannot silently resurrect one.
+_COMPROMISED_SECRET_KEYS = frozenset({"local-dev-only-change-me-please-32+chars"})
 
 
 class Settings(BaseSettings):
@@ -21,8 +32,9 @@ class Settings(BaseSettings):
     environment: str = "local"
 
     # --- Auth ---
-    # Local-dev default only. Override AEGIS_SECRET_KEY in any real environment.
-    secret_key: str = "local-dev-only-change-me-please-32+chars"
+    # No default. Supplied via AEGIS_SECRET_KEY, or generated per process when
+    # environment == "local". See _resolve_secret_key below.
+    secret_key: str = ""
     jwt_algorithm: str = "HS256"
     access_token_ttl_minutes: int = 8 * 60
 
@@ -65,6 +77,47 @@ class Settings(BaseSettings):
     alphavantage_api_key: str = ""
     enable_live_fintech: bool = True
     fintech_live_poll_seconds: float = 6.0
+
+    @model_validator(mode="after")
+    def _resolve_secret_key(self) -> "Settings":
+        """Fail closed on a missing, short, or publicly-known signing key.
+
+        A forgeable key is a total auth bypass here: ``create_access_token``
+        carries ``role`` and ``scope`` in the payload, so anyone able to sign a
+        token can grant themselves any scope. The only case that does not raise
+        is a local environment with no key configured, which gets an ephemeral
+        random key so the demo still starts with no setup.
+        """
+        key = self.secret_key.strip()
+
+        if key in _COMPROMISED_SECRET_KEYS:
+            raise ValueError(
+                "AEGIS_SECRET_KEY is set to a value published in this repository's "
+                "git history and must be considered public. Generate a new one: "
+                "python -c 'import secrets; print(secrets.token_urlsafe(48))'"
+            )
+
+        if not key:
+            if self.environment != "local":
+                raise ValueError(
+                    f"AEGIS_SECRET_KEY is required when AEGIS_ENVIRONMENT is "
+                    f"'{self.environment}'. Generate one: "
+                    "python -c 'import secrets; print(secrets.token_urlsafe(48))'"
+                )
+            # Local demo: ephemeral per-process key. Tokens are invalidated by a
+            # restart, and multi-worker uvicorn would sign with mismatched keys —
+            # set AEGIS_SECRET_KEY explicitly if either matters.
+            self.secret_key = secrets.token_urlsafe(48)
+            return self
+
+        if len(key) < MIN_SECRET_KEY_LENGTH:
+            raise ValueError(
+                f"AEGIS_SECRET_KEY must be at least {MIN_SECRET_KEY_LENGTH} "
+                f"characters (got {len(key)})."
+            )
+
+        self.secret_key = key
+        return self
 
 
 @lru_cache

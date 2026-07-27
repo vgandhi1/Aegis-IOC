@@ -2,8 +2,11 @@ services:
   backend:
     build: ./backend
     environment:
-      # LOCAL DEMO ONLY — override with a real secret + IdP before any real deploy.
-      AEGIS_SECRET_KEY: "local-dev-only-change-me-please-32+chars"
+      # LOCAL DEMO ONLY — wire a real IdP before any real deploy.
+      # No secret is shipped. Left empty, the backend generates a random signing
+      # key per process (tokens drop on restart). Any non-local AEGIS_ENVIRONMENT
+      # refuses to start without an explicit key.
+      AEGIS_SECRET_KEY: "${AEGIS_SECRET_KEY:-}"
       AEGIS_ENVIRONMENT: "local"
       AEGIS_CORS_ORIGINS: '["http://localhost:8080"]'
       AEGIS_ENABLE_SIMULATORS: "true"

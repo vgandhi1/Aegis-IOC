@@ -190,7 +190,7 @@ AegisIOC/
 
 This is a **reference implementation for local use**. Before any real deployment:
 
-- Replace `AEGIS_SECRET_KEY` and wire a real Identity Provider — the demo users in `backend/app/auth/users.py` are local-only.
+- Set `AEGIS_SECRET_KEY` (32+ chars) and wire a real Identity Provider — the demo users in `backend/app/auth/users.py` are local-only. No key ships with the repo: any non-`local` `AEGIS_ENVIRONMENT` refuses to start without one, and locally an ephemeral key is generated per process.
 - Replace the in-memory stores with the per-domain compliant datastores.
 - Front the services with the real gateway (Envoy + ext_authz).
 - API keys for live feeds belong in `backend/.env` (git-ignored), never in source.
